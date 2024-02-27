@@ -1,7 +1,7 @@
 # calibration-tools
 
 
-# Sampling Images
+## Sampling Images
 
 To sample images from a dataset, use the `sample.py` script. The script will sample images from the dataset and save them to a new directory. After doing this, you can directly load these images and point clouds to matlab for calibration.
 
@@ -9,7 +9,7 @@ To sample images from a dataset, use the `sample.py` script. The script will sam
 python matlab/sample.py -i /robodata/ecocar_logs/processed/CACCDataset -s 44 -o ./sample_outputs -r 10
 ```
 
-# LiDAR Camera Calibration
+## LiDAR Camera Calibration
 
 Use the MATLAB stereo camera calibrator app to calibrate cameras, save the stereo calibration data to a .mat file
 
@@ -44,7 +44,7 @@ A = tform.A
 save("T_os1_cam0.mat", "A", "errors")
 ```
 
-# Postprocess to ROS Compatible Format
+## Postprocess to ROS Compatible Format
 
 Use the `postprocess.py` script to convert the calibration data to a ROS compatible format. The script will save the calibration data to a .yaml file.
 
