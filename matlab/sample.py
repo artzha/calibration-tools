@@ -13,7 +13,7 @@ import argparse
 
 # Parse arguments
 parser = argparse.ArgumentParser(description='Copy images from a folder to another folder')
-parser.add_argument('-i', '--indir', type=str, help='Input folder that contains camera directories')
+parser.add_argument('-i', '--indir', type=str, default="/robodata/ecocar_logs/processed/CACCDataset",  help='Input folder that contains camera directories')
 parser.add_argument('-s', '--sequence', type=str, default=44, help='Sequence to use for the images')
 parser.add_argument('-o', '--outdir', type=str, default='./sample_outputs', help='Output folder')
 parser.add_argument('-r', '--skiprate', type=int, default=10, help='Number of images to skip per frame')

@@ -9,9 +9,9 @@ To sample images from a dataset, use the `sample.py` script. The script will sam
 python matlab/sample.py -i /robodata/ecocar_logs/processed/CACCDataset -s 44 -o ./sample_outputs -r 10
 ```
 
-## LiDAR Camera Calibration
+## Stereo Camera Calibration
 
-Use the MATLAB stereo camera calibrator app to calibrate cameras, save the stereo calibration data to a .mat file
+Use the MATLAB stereo camera calibrator app to calibrate the stereo cameras, save the stereo calibration data to a .mat file
 
 ```bash
 cam0_params = stereoParams.CameraParameters1;
@@ -36,12 +36,67 @@ A = stereoParams.PoseCamera2.A;
 save("T_cam0_cam1.mat", "A")
 ```
 
+## Fisheye camera Calibration
+
+Then, use the MATLAB camera calibrator app to calibrate the fisheye camera, save the fisheye calibration data to a .mat file.
+
+Fisheye Camera 2
+```bash
+cam2_params = cameraParams;
+save("calib_cam2.mat", "cameraParams")
+raddist = cam2_params.Intrinsics.RadialDistortion;
+tandist = cam2_params.Intrinsics.TangentialDistortion;
+K = cam2_params.Intrinsics.K;
+save("K_cam2.mat", "K", "raddist", "tandist")
+```
+
+Fisheye Camera 3
+```bash
+cam3_params = cameraParams;
+save("calib_cam3.mat", "cam3_params")
+raddist = cam3_params.Intrinsics.RadialDistortion;
+tandist = cam3_params.Intrinsics.TangentialDistortion;
+K = cam3_params.Intrinsics.K;
+save("K_cam3.mat", "K", "raddist", "tandist")
+```
+
+Fisheye Camera 4
+```bash
+cam4_params = cameraParams;
+save("calib_cam4.mat", "cam4_params")
+raddist = cam4_params.Intrinsics.RadialDistortion;
+tandist = cam4_params.Intrinsics.TangentialDistortion;
+K = cam4_params.Intrinsics.K;
+save("K_cam4.mat", "K", "raddist", "tandist")
+```
+
+## LiDAR Camera Calibration
+
 Then, use the MATLAB LiDAR camera calibrator app to calibrate the LiDAR to the camera. Use fixed intrinsics from
 the stereoParams calibration session for the camera. Save the LiDAR camera calibration data to a .mat file.
 
+LiDAR Fisheye camera 0
 ```bash
 A = tform.A
 save("T_os1_cam0.mat", "A", "errors")
+```
+
+LiDAR Fisheye camera 2
+```bash
+A = tform.A
+save("T_os1_cam2.mat", "A", "errors")
+```
+
+LiDAR Fisheye camera 3
+```bash
+A = tform.A
+save("T_os1_cam3.mat", "A", "errors")
+```
+
+LiDAR Fisheye camera 4
+```bash
+A = tform.A
+save("T_os1_cam4.mat", "A", "errors")
 ```
 
 ## Postprocess to ROS Compatible Format

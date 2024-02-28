@@ -32,7 +32,7 @@ yaml.width = 2
 yaml.representer.add_representer(float, my_represent_float)
 
 parser = argparse.ArgumentParser(description='Copy images from a folder to another folder')
-parser.add_argument('-i', '--indir', type=str, help='Input folder that contains matlab calibration .mat files')
+parser.add_argument('-i', '--indir', type=str, default="./matlab_data",  help='Input folder that contains matlab calibration .mat files')
 parser.add_argument('-s', '--sequence', type=int, default=44, help='Sequence to use for the images')
 parser.add_argument('-o', '--outdir', type=str, help='Output folder to save yaml calibration files')
 
@@ -74,6 +74,10 @@ def read_mat_as_dict(filename):
         calib['image_height'] = 600
         calib['image_width'] = 960
     elif caltype=="T":
+        A = mat['A'].reshape(4, 4)
+        if "cam0" in sensorname:
+            A[:3, 3] = A[:3, 3] * 0.001 # Convert to meters
+
         calib['extrinsic_matrix'] = {
             "rows": 4,
             "cols": 4,
