@@ -45,24 +45,34 @@ Then, use the custom OpenCV fisheye calibration script to calibrate the fisheye 
 
 Fisheye Camera 1
 ```bash
-python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam2 -s SEQ0,SEQ1,...,SEQN
+python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam2 -s 44,45
 ```
 
 Fisheye Camera 2
 ```bash
-python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam3 -s SEQ0,SEQ1,...,SEQN
+python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam3 -s 44,45
 ```
 
 Fisheye Camera 3
 ```bash
-python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam4 -s SEQ0,SEQ1,...,SEQN
+python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam4 -s 44,45
 ```
 
 
 ## LiDAR Camera Calibration
 
-Then, use the MATLAB LiDAR camera calibrator app to calibrate the LiDAR to the camera. Use fixed intrinsics from
-the stereoParams calibration session for the camera. Save the LiDAR camera calibration data to a .mat file.
+We will use the MATLAB LiDAR camera calibrator app to calibrate the LiDAR to the camera. Before doing this, we need to first 
+undistort the fisheye images because the LIDAR camera calibrator app does not support fisheye distortion. 
+
+```bash
+python opencv/undistortFisheye.py -i {input_directory} -o {output_directory} -c cam2 -s 44
+python opencv/undistortFisheye.py -i {input_directory} -o {output_directory} -c cam3 -s 44
+python opencv/undistortFisheye.py -i {input_directory} -o {output_directory} -c cam4 -s 44
+```
+
+After undistorting the images, load the undistorted images and point clouds to the LiDAR camera calibration app. Follow the 
+[tutorial](https://www.mathworks.com/help/lidar/ref/lidarcameracalibrator-app.html) to use the app. When finished, run the 
+respective commands in the matlab command line to save each extrinsic calibration.
 
 LiDAR Stereo camera 0
 ```bash
@@ -94,7 +104,7 @@ Use the `postprocess.py` script to convert the calibration data to a ROS compati
 Copy the calibrations to the root directory where your data is stored.
 
 ```bash
-python matlab/convert.py -i matlab_data -s 44 -o /robodata/ecocar_logs/processed/CACCDataset/calibrations
+python matlab/convert.py -i {matlab_dir} -s 44 -o {output_dir/calibrations}
 ```
 
 ## Visualize calibration quality
