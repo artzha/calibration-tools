@@ -1,5 +1,8 @@
 # calibration-tools
 
+This repository provides tools to calibrate the cameras and LiDAR on the EcoCAR vehicle. The tools are designed to be used with the CACC dataset, but can be modified to work with other datasets. After following the following tutorial, you should be able to produce LiDAR camera visualizations like below.
+
+![color_depth](./color_depth.png)
 
 ## Sampling Images
 
