@@ -11,6 +11,9 @@ import numpy as np
 import ruamel.yaml
 import matplotlib.cm as cm
 
+from scipy.spatial.transform import Rotation as R
+from opencv.undistortFisheye import undistortFisheyeSingle
+
 def my_represent_float(self, data):
     if 0 < abs(data) < 1e-5:
         return self.represent_scalar(u'tag:yaml.org,2002:float', '{:.15f}'.format(data).rstrip('0').rstrip('.'))
@@ -64,6 +67,11 @@ def pixels_to_depth(pc_np, calib, IMG_H, IMG_W, return_depth=True, IMG_DEBUG_FLA
     valid_lidar_points  = lidar_pts[valid_point_mask, :]
     valid_lidar_depth   = pc_rect_cam[valid_point_mask, 2] # Use z in cam frame
     
+    # Sort lidar depths by farthest to closest
+    sortidx = np.argsort(-valid_lidar_depth)
+    valid_lidar_depth = valid_lidar_depth[sortidx]
+    valid_lidar_points = valid_lidar_points[sortidx, :]
+
     if IMG_DEBUG_FLAG:
         test_img = np.zeros((IMG_H, IMG_W), dtype=int)
         test_img[valid_lidar_points[:, 1], valid_lidar_points[:, 0]] = 255
@@ -73,6 +81,8 @@ def pixels_to_depth(pc_np, calib, IMG_H, IMG_W, return_depth=True, IMG_DEBUG_FLA
     depth_image_np = np.zeros((IMG_H, IMG_W), dtype=np.float32)
     depth_image_np[valid_lidar_points[:, 1], valid_lidar_points[:, 0]] = valid_lidar_depth
     
+    #2 Use cv2 di
+
     if IMG_DEBUG_FLAG:
         depth_mm = (depth_image_np * 1000).astype(np.uint16)
         cv2.imwrite("pp_depth_max.png", depth_mm)
@@ -80,6 +90,27 @@ def pixels_to_depth(pc_np, calib, IMG_H, IMG_W, return_depth=True, IMG_DEBUG_FLA
     if return_depth:
         return depth_image_np
     return valid_lidar_points, valid_lidar_depth
+
+def undistortPinhole(img_path, calib_dict, save_path):
+    img_np = cv2.imread(img_path)
+    K = np.array(calib_dict['camera_matrix']['data']).reshape(
+        calib_dict['camera_matrix']['rows'], calib_dict['camera_matrix']['cols']
+    )
+    D = np.array(calib_dict['distortion_coefficients']['data']).reshape(
+        calib_dict['distortion_coefficients']['rows'], calib_dict['distortion_coefficients']['cols']
+    )
+    W, H = calib_dict['image_width'], calib_dict['image_height']
+    new_K, roi = cv2.getOptimalNewCameraMatrix(K, D, (W,H), 1, (W,H))
+    img_undist = cv2.undistort(img_np, K, D, None, new_K)
+
+    x, y, w, h = roi
+    img_np = img_undist[y:y+h, x:x+w]
+    if save_path is not None:
+        cv2.imwrite('visualize.png', img_np)
+        return None
+
+    return img_np
+
 
 def main(args):
     indir = args.indir
@@ -92,6 +123,8 @@ def main(args):
     # Load point cloud
     pc_dir = join(indir, "3d_raw", "os1", f'{seq}')
     calib_dir = join(indir, "calibrations", f'{seq}')
+    # calib_dir = join("calibration_outputs/calibrations", f'{seq}')
+
     img_dir = join(indir, "2d_raw", camid, f'{seq}')
 
     pc_path = join(pc_dir, f'3d_raw_os1_{seq}_{frame}.bin')
@@ -100,17 +133,28 @@ def main(args):
     lidarcam_extrinsics_path = join(calib_dir, f'calib_os1_to_{camid}.yaml')
 
     assert os.path.exists(pc_path), f'Point cloud {pc_path} does not exist'
+    if not os.path.exists(img_path): # Robustness to jpg and png
+        img_path = img_path.replace(".jpg", ".png")
     assert os.path.exists(img_path), f'Image {img_path} does not exist'
     assert os.path.exists(cam_intrinsics_path), f'Camera intrinsics {cam_intrinsics_path} does not exist'
     assert os.path.exists(lidarcam_extrinsics_path), f'Lidar-camera extrinsics {lidarcam_extrinsics_path} does not exist'
     
     # Load point cloud
     pc_np = np.fromfile(pc_path, dtype=np.float32).reshape(-1, 5)
-    img_np = cv2.imread(img_path)
     with open(cam_intrinsics_path, 'r') as f:
         cam_intrinsics = yaml.load(f)
     with open(lidarcam_extrinsics_path, 'r') as f:
         lidarcam_extrinsics = yaml.load(f)
+
+    
+    if cam_intrinsics['distortion_model'] == 'plumb_bob':
+        img_np = cv2.imread(img_path)
+    elif cam_intrinsics['distortion_model'] == 'fisheye':
+        img_np = undistortFisheyeSingle((img_path, cam_intrinsics, None))
+    else:
+        raise f'Unknown distortion model {cam_intrinsics["distortion_model"]} for camera {camid}'
+
+    # Recompute Camera to LiDAR extrinsics using new camera matrix
 
     # Project point cloud to image
     IMG_W = cam_intrinsics['image_width']
@@ -118,6 +162,19 @@ def main(args):
     T_lidar_to_cam = np.array(lidarcam_extrinsics['extrinsic_matrix']['data']).reshape(
         lidarcam_extrinsics['extrinsic_matrix']['rows'], lidarcam_extrinsics['extrinsic_matrix']['cols']
     )
+
+    # TODO: Delete this
+    # import pdb; pdb.set_trace()
+    # euler_rot = np.array([102.3646547, 1.9324568, -1.7921589])
+    # rot = R.from_euler('xyz', euler_rot, degrees=True)
+    # T_lidar_to_cam[:3, :3] = rot.as_matrix()
+    # T_lidar_to_cam[:3, :3] = np.array([
+    #     [1.0, 0.0, 0.0],
+    #     [0.0, 0.0, -1.0],
+    #     [0.0, 1.0, 0.0]
+    # ])
+    # T_lidar_to_cam[:3, 3] = np.array([0.0, 0.0, 0.0])
+
     K = np.array(cam_intrinsics['camera_matrix']['data']).reshape(
         cam_intrinsics['camera_matrix']['rows'], cam_intrinsics['camera_matrix']['cols']
     )

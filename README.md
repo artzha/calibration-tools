@@ -36,7 +36,75 @@ A = stereoParams.PoseCamera2.A;
 save("T_cam0_cam1.mat", "A")
 ```
 
-## Fisheye camera Calibration
+## Fisheye Camera Calibration (Fisheye Model)
+
+Then, use the custom OpenCV fisheye calibration script to calibrate the fisheye camera and save the fisheye calibration to a .yaml file.
+
+Fisheye Camera 1
+```bash
+python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam2 -s SEQ0,SEQ1,...,SEQN
+```
+
+Fisheye Camera 2
+```bash
+python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam3 -s SEQ0,SEQ1,...,SEQN
+```
+
+Fisheye Camera 3
+```bash
+python opencv/calibrateFisheye.py -i {input_directory} -o {output_directory} -c cam4 -s SEQ0,SEQ1,...,SEQN
+```
+
+
+## LiDAR Camera Calibration
+
+Then, use the MATLAB LiDAR camera calibrator app to calibrate the LiDAR to the camera. Use fixed intrinsics from
+the stereoParams calibration session for the camera. Save the LiDAR camera calibration data to a .mat file.
+
+LiDAR Stereo camera 0
+```bash
+A = tform.A
+save("T_os1_cam0.mat", "A", "errors")
+```
+
+LiDAR Fisheye camera 2
+```bash
+A = tform.A
+save("T_os1_cam2.mat", "A", "errors")
+```
+
+LiDAR Fisheye camera 3
+```bash
+A = tform.A
+save("T_os1_cam3.mat", "A", "errors")
+```
+
+LiDAR Fisheye camera 4
+```bash
+A = tform.A
+save("T_os1_cam4.mat", "A", "errors")
+```
+
+## Postprocess to ROS Compatible Format
+
+Use the `postprocess.py` script to convert the calibration data to a ROS compatible format. The script will save the calibration data to a .yaml file.
+Copy the calibrations to the root directory where your data is stored.
+
+```bash
+python matlab/convert.py -i matlab_data -s 44 -o /robodata/ecocar_logs/processed/CACCDataset/calibrations
+```
+
+## Visualize calibration quality
+
+Use the `visualize.py` script to visualize the LiDAR to camera projection.
+
+```bash
+python visualize.py -i {input_directory} -s {sequence} -c {camid} -f {frame}
+```
+
+# Deprecated Functionality (DO NOT USE)
+
+## Fisheye camera Calibration (Pinhole Model)
 
 Then, use the MATLAB camera calibrator app to calibrate the fisheye camera, save the fisheye calibration data to a .mat file.
 
@@ -68,41 +136,4 @@ raddist = cam4_params.Intrinsics.RadialDistortion;
 tandist = cam4_params.Intrinsics.TangentialDistortion;
 K = cam4_params.Intrinsics.K;
 save("K_cam4.mat", "K", "raddist", "tandist")
-```
-
-## LiDAR Camera Calibration
-
-Then, use the MATLAB LiDAR camera calibrator app to calibrate the LiDAR to the camera. Use fixed intrinsics from
-the stereoParams calibration session for the camera. Save the LiDAR camera calibration data to a .mat file.
-
-LiDAR Fisheye camera 0
-```bash
-A = tform.A
-save("T_os1_cam0.mat", "A", "errors")
-```
-
-LiDAR Fisheye camera 2
-```bash
-A = tform.A
-save("T_os1_cam2.mat", "A", "errors")
-```
-
-LiDAR Fisheye camera 3
-```bash
-A = tform.A
-save("T_os1_cam3.mat", "A", "errors")
-```
-
-LiDAR Fisheye camera 4
-```bash
-A = tform.A
-save("T_os1_cam4.mat", "A", "errors")
-```
-
-## Postprocess to ROS Compatible Format
-
-Use the `postprocess.py` script to convert the calibration data to a ROS compatible format. The script will save the calibration data to a .yaml file.
-
-```bash
-python matlab/convert.py -i matlab_data -s 44 -o /robodata/ecocar_logs/processed/CACCDataset/calibrations
 ```

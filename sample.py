@@ -15,8 +15,12 @@ import argparse
 parser = argparse.ArgumentParser(description='Copy images from a folder to another folder')
 parser.add_argument('-i', '--indir', type=str, default="/robodata/ecocar_logs/processed/CACCDataset",  help='Input folder that contains camera directories')
 parser.add_argument('-s', '--sequence', type=str, default=44, help='Sequence to use for the images')
-parser.add_argument('-o', '--outdir', type=str, default='./sample_outputs', help='Output folder')
-parser.add_argument('-r', '--skiprate', type=int, default=10, help='Number of images to skip per frame')
+parser.add_argument('-o', '--outdir', type=str, default='./caccdataset', help='Output folder')
+parser.add_argument('-r', '--skiprate', type=int, default=10, help='Number of images to skip per frame. Set to -1 to disable')
+parser.add_argument('-sf', '--start_frame', type=int, default=0, help='Frame to begin sampling at')
+parser.add_argument('-ef', '--end_frame', type=int, default=0, help='Frame to end sampling at')
+
+SENSOR_LIST = ['cam0', 'cam1', 'cam2', 'cam3', 'cam4', 'os1']
 
 def get_frame_from_name(filename):
     # Extract last frame number from filenames with format 2d_raw_cam0_sequence_frame.png
@@ -55,6 +59,8 @@ def main(args):
     seq = args.sequence
     outdir = args.outdir
     rate = args.skiprate
+    start_frame = args.start_frame
+    end_frame = args.end_frame
     assert os.path.exists(indir), f'Input folder {indir} does not exist'
 
     if not os.path.exists(outdir):
@@ -69,9 +75,16 @@ def main(args):
     files = [f for f in os.listdir(cam_fulldirs[0]) if f.endswith('.png')]
     frames = sorted([get_frame_from_name(f) for f in files])
 
+    if args.end_frame > 0:
+        frames = frames[args.start_frame:args.end_frame]
+    else:
+        frames = frames[args.start_frame:]
+    
     #2 Copy frames for each camera
     for cam_fulldir in cam_fulldirs:
         subdir = cam_fulldir.split('/')[-2]
+        if subdir not in SENSOR_LIST:
+            continue
         dstdir = os.path.join(outdir, f'{seq}', subdir)
         os.makedirs(dstdir, exist_ok=True)
         for frame in frames[::rate]:

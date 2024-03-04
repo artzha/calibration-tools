@@ -18,7 +18,11 @@ import argparse
 import scipy.io as sio
 import numpy as np
 
-EXPECTED_CALIBS = ['K_cam0.mat', 'K_cam1.mat', 'T_cam0_cam1.mat', 'T_os1_cam0.mat']
+# EXPECTED_CALIBS = ['K_cam0.mat', 'K_cam1.mat', 'T_cam0_cam1.mat', 'T_os1_cam0.mat',
+#                    'K_cam2.mat', 'K_cam3.mat', 'K_cam4.mat', 
+#                    'T_os1_cam2.mat', 'T_os1_cam3.mat', 'T_os1_cam4.mat']
+EXPECTED_CALIBS = ['T_cam0_cam1.mat', 'T_os1_cam0.mat',
+                   'T_os1_cam2.mat', 'T_os1_cam3.mat', 'T_os1_cam4.mat']
 
 def my_represent_float(self, data):
     if 0 < abs(data) < 1e-5:
@@ -34,7 +38,7 @@ yaml.representer.add_representer(float, my_represent_float)
 parser = argparse.ArgumentParser(description='Copy images from a folder to another folder')
 parser.add_argument('-i', '--indir', type=str, default="./matlab_data",  help='Input folder that contains matlab calibration .mat files')
 parser.add_argument('-s', '--sequence', type=int, default=44, help='Sequence to use for the images')
-parser.add_argument('-o', '--outdir', type=str, help='Output folder to save yaml calibration files')
+parser.add_argument('-o', '--outdir', type=str, default="calibration_outputs/calibrations", help='Output folder to save yaml calibration files')
 
 def read_mat_as_dict(filename):
     """
@@ -75,6 +79,7 @@ def read_mat_as_dict(filename):
         calib['image_width'] = 960
     elif caltype=="T":
         A = mat['A'].reshape(4, 4)
+
         if "cam0" in sensorname:
             A[:3, 3] = A[:3, 3] * 0.001 # Convert to meters
 
@@ -135,11 +140,11 @@ def main(args):
             print(f'Processing {filename}')
             calib, sensorname = read_mat_as_dict(join(calib_dir, filename))
             calib_dict[sensorname] = calib
-
+            
     #2 Compute remaining transformations from the extrinsics
     print("|- Computing remaining lidar to camera transformations -|")
     compute_lidar_to_cameras(calib_dict)
-        
+    
     #3 Save all calibrations to yaml files
     for sensorname, calib in calib_dict.items():
         if "to" in sensorname:
