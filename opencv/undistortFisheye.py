@@ -14,6 +14,8 @@ import ruamel.yaml
 
 from multiprocessing import Pool
 
+# python opencv/undistortFisheye.py -i /robodata/ecocar_logs/processed/CACCDataset/2d_raw -o /robodata/ecocar_logs/processed/CACCDataset/2d_undistort -c cam4
+
 def my_represent_float(self, data):
     if 0 < abs(data) < 1e-5:
         return self.represent_scalar(u'tag:yaml.org,2002:float', '{:.15f}'.format(data).rstrip('0').rstrip('.'))
@@ -59,9 +61,9 @@ def undistortFisheyeSingle(inputs):
 def undistortFisheye(fisheye_img_dir, undistort_img_dir, calib_dict):
     if not os.path.exists(undistort_img_dir):
         os.makedirs(undistort_img_dir)
-   
+
     fisheye_images = glob.glob(fisheye_img_dir)
-    fisheye_images = sorted(fisheye_images, key=lambda x: int(os.path.basename(x).split('.')[0]))
+    fisheye_images = sorted(fisheye_images, key=lambda x: int(os.path.basename(x).split('.')[0].split('_')[-1]))
     fisheye_undistort_img_dirs = [join(undistort_img_dir, os.path.basename(img)) for img in fisheye_images]
     calib_dict_list = [calib_dict for _ in fisheye_images]
 
@@ -84,6 +86,10 @@ def main(args):
     # Define your paths
     fisheye_img_dir = join(indir, f'{seq}/{camid}/*')
     img_outdir = join(outdir, f'{seq}/{camid}')
+
+    if not os.path.exists(fisheye_img_dir):
+        fisheye_img_dir = join(indir, f'{camid}/{seq}/*')
+        img_outdir = join(outdir, f'{camid}/{seq}')
 
     # Load calibrations from file
     calib_dir = join(indir_calib, f'{seq}', f'calib_{camid}_intrinsics.yaml')
