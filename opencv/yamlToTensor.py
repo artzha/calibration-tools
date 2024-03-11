@@ -27,7 +27,7 @@ yaml.representer.add_representer(float, my_represent_float)
 
 parser = argparse.ArgumentParser(description='Convert CODa format calibrations to nuScenes for BEVFusion')
 parser.add_argument('-i', '--indir', type=str, default="/robodata/ecocar_logs/processed/CACCDataset", help='Root directory for dataset')
-parser.add_argument('-o', '--outdir', type=str, default="./leva_calibrations", help='Output directory for the calibrations')
+parser.add_argument('-o', '--outdir', type=str, default="./leva_tensors", help='Output directory for the calibrations')
 parser.add_argument('-s', '--sequence', type=int, default=0, help='Sequence to use for the calibrations')
 
 CAMID_LIST = ["cam0", "cam1", "cam2", "cam3", "cam4"]
@@ -72,18 +72,14 @@ def ecocar2nusc_calibration(calib_dir):
     data["camera2ego"] = []
     data["camera_intrinsics"] = []
     data["camera2lidar"] = []
-    data["lidar2ego"] = []
+    data["lidar2ego"] = np.eye(4, dtype=np.float32)
     data["img_aug_matrix"] = []
-    data["lidar_aug_matrix"] = []
+    data["lidar_aug_matrix"] = np.eye(4, dtype=np.float32)
     for camid in CAMID_LIST:
         #2 Dump camera intrinsics 4x4
         intrinsics = np.eye(4, dtype=np.float32)
         intrinsics[:3, :3] = calib_dict[camid]['K']
         data["camera_intrinsics"].append(intrinsics)
-
-        #4 Dump lidar2ego
-        lidar2ego = np.eye(4, dtype=np.float32)
-        data['lidar2ego'].append(lidar2ego)
 
         #5 Dump lidar2camera
         lidar2camera = calib_dict[f'os1_{camid}']['A'].astype(np.float32)
@@ -106,22 +102,28 @@ def ecocar2nusc_calibration(calib_dir):
         data['lidar2image'].append(lidar2image)
 
         #8 Dump imageaugmatrix
-        img_aug = np.eye(4, dtype=np.float32)
+        """
+        H=960, W=600
+        32 = (960 * fx - 704) / 2
+        176 = (600 * fy - 256) / 2
+        Where fx, and fy and computed to match our drop dimensions and output dimensions are theirs
+        """
+        img_aug = np.array([
+            [0.8, 0, 0, -32],
+            [0, 0.72, 0, -176],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ], dtype=np.float32)
+        # img_aug = np.eye(4, dtype=np.float32)
         data['img_aug_matrix'].append(img_aug)
-
-        #9 Dump lidaraugmatrix
-        lidar_aug = np.eye(4, dtype=np.float32)
-        data['lidar_aug_matrix'].append(lidar_aug)
 
     # Copy the last fisheye twice to give same number of camera inputs as expected
     data['camera_intrinsics'].append(data['camera_intrinsics'][-1])
-    data['lidar2ego'].append(data['lidar2ego'][-1])
     data['lidar2camera'].append(data['lidar2camera'][-1])
     data['camera2ego'].append(data['camera2ego'][-1])
     data['camera2lidar'].append(data['camera2lidar'][-1])
     data['lidar2image'].append(data['lidar2image'][-1])
     data['img_aug_matrix'].append(data['img_aug_matrix'][-1])
-    data['lidar_aug_matrix'].append(data['lidar_aug_matrix'][-1])
 
     return data
 
@@ -134,20 +136,25 @@ def ecocar2nusc_sensor(data_dict, start, end):
         camn: ""
         os1: ""
     """
-    data = {"img": [], "points": []}
+    data = {
+        # "img": [],
+        "points": []
+    }
     for frame in range(start, end):
-        images = []
-        for camid in CAMID_LIST:
-            cam_dir = data_dict[camid]
-            subdir, sensorid, seq = cam_dir.split('/')[-3:]
-            img_path = join(cam_dir, f'{subdir}_{sensorid}_{seq}_{frame}.jpg')
-            images.append(Image.open(img_path))
-        data["img"].append(images)
-
+        # images = []
+        # for camid in CAMID_LIST:
+        #     cam_dir = data_dict[camid]
+        #     subdir, sensorid, seq = cam_dir.split('/')[-3:]
+        #     img_path = join(cam_dir, f'{subdir}_{sensorid}_{seq}_{frame}.jpg')
+        #     images.append(Image.open(img_path))
+        # data["img"].append(images)
         points_dir = data_dict["os1"]
         subdir, sensorid, seq = points_dir.split('/')[-3:]
         points_path = join(points_dir, f'{subdir}_{sensorid}_{seq}_{frame}.bin')
         points = np.fromfile(points_path, dtype=np.float32).reshape(-1, 5)
+        points[:, -1] = points[:, -1] / 1e6 # Convert to seconds to avoid truncation
+
+        points = points.clip(min=np.finfo(np.float16).min, max=np.finfo(np.float16).max).astype(np.float16)
         data["points"].append(points)
 
     return data
@@ -170,13 +177,20 @@ def main(args):
         sensordata_dict[camid] = cam_dir
 
     sensordata_dict["os1"] = join(indir, "3d_raw", "os1", f'{sequence}')
-
-    # Load first 10 frames (Not Needed, load directly from ROS)
-    # data.update(ecocar2nusc_sensor(sensordata_dict, 0, 10))
+    
+    # Load first 10 lidar point clouds
+    data.update(ecocar2nusc_sensor(sensordata_dict, 0, 10))
 
     # Save the calibration data to .tensor files
     for key, value in data.items():
-        tensor.save(np.array(value, dtype=np.float32), join(outdir, f'{key}.tensor'), True)
+        if key == "points":
+            save_dir = join(outdir, "points", f'{sequence}')
+            os.makedirs(save_dir, exist_ok=True)
+            for frame, pc in enumerate(value):
+                tensor.save(pc.astype(np.float16), join(save_dir, f'{frame}.tensor'), True)
+        else:
+            calib = np.array(value, dtype=np.float32)[np.newaxis, ...]
+            tensor.save(calib, join(outdir, f'{key}.tensor'), True)
 
 if __name__ == "__main__":
     args = parser.parse_args()

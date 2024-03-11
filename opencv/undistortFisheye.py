@@ -64,7 +64,7 @@ def undistortFisheye(fisheye_img_dir, undistort_img_dir, calib_dict):
 
     fisheye_images = glob.glob(fisheye_img_dir)
     fisheye_images = sorted(fisheye_images, key=lambda x: int(os.path.basename(x).split('.')[0].split('_')[-1]))
-    fisheye_undistort_img_dirs = [join(undistort_img_dir, os.path.basename(img)) for img in fisheye_images]
+    fisheye_undistort_img_dirs = [join(undistort_img_dir, os.path.basename(frame).replace("2d_raw", "2d_undistort")) for frame in fisheye_images]
     calib_dict_list = [calib_dict for _ in fisheye_images]
 
     p = Pool(processes=20)

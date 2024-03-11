@@ -21,6 +21,32 @@
 
 import numpy as np
 
+def numpy_to_pcd(array, filename):
+    """
+    Convert a Nx3 numpy array to a PCD file.
+
+    Parameters:
+    array (numpy.ndarray): Nx3 numpy array containing point cloud data.
+    filename (str): The output filename for the PCD file.
+    """
+    assert array.shape[1] == 3, "Input array must be Nx3."
+
+    header = f"""# .PCD v0.7 - Point Cloud Data file format
+VERSION 0.7
+FIELDS x y z
+SIZE 4 4 4
+TYPE F F F
+COUNT 1 1 1
+WIDTH {len(array)}
+HEIGHT 1
+VIEWPOINT 0 0 0 1 0 0 0
+POINTS {len(array)}
+DATA ascii
+"""
+    with open(filename, 'w') as f:
+        f.write(header)
+        np.savetxt(f, array, fmt='%f %f %f')
+
 def save(tensor, file, verbose=False):
     
     if not isinstance(tensor, np.ndarray):
@@ -70,3 +96,44 @@ def load(file, return_torch=False):
             import torch
             return torch.from_numpy(data)
         return data
+    
+if __name__ == "__main__":
+    from os.path import join
+    subpath_list = [
+        "camera_intrinsics.tensor",
+        "camera2ego.tensor",  
+        "camera2lidar.tensor",
+        "img_aug_matrix.tensor",
+        "lidar_aug_matrix.tensor",
+        "lidar2camera.tensor", 
+        "lidar2ego.tensor", 
+        "lidar2image.tensor",
+        # "points.tensor"
+    ]
+
+    for subpath in subpath_list:    
+        indir = "example-data"
+        # subpath = "camera2ego.tensor"
+        
+        data1 = load(join(indir, subpath), return_torch=False)
+        print(f'{subpath} _ {indir}')
+        print(data1.shape)
+        print(data1.dtype)
+
+        if subpath == "img_aug_matrix.tensor":
+            print(data1[0][0])
+            import pdb; pdb.set_trace()
+
+        indir = "./leva_tensors"
+        subpath = subpath
+        data2 = load(join(indir, subpath), return_torch=False)
+        print(f'{subpath} _ {indir}')
+        print(data2.shape)
+        print(data2.dtype)
+
+        assert data1.shape == data2.shape, f"Shape mismatch: {data1.shape} != {data2.shape}"
+        assert data1.dtype == data2.dtype, f"Type mismatch: {data1.dtype} != {data2.dtype}"
+        # xyz = data[:, :3]
+        # numpy_to_pcd(xyz, "test.pcd")
+    
+    print("Size and type checks passed!")

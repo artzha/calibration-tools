@@ -3,3 +3,4 @@
 *.mat
 **/caccdataset*/**
 **/calibration*/**
+**__pycache__**
