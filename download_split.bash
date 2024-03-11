@@ -5,18 +5,20 @@ extension="bin"
 
 # Define base paths
 remote_base="robodata:/robodata/ecocar_logs/processed/CACCDataset/${modality}"
-local_base="/media/arthur/Art_SSD/ecocar_processed/CACCDataset/${modality}"
+local_base="/media/warthog/Art_SSD/ecocar_processed/CACCDataset/${modality}"
 
 # Define directories to iterate over
 if [ "$modality" == "2d_raw" ]; then
-    directories=("cam0" "cam1" "cam2" "cam3" "cam4")
+    directories=("cam0" "cam1")
+elif [ "$modality" == "2d_undistorted" ]; then
+    directories=("cam2" "cam3" "cam4")
 else
     directories=("os1")
 fi
 
 # Number of frames to copy
 num_frames=10
-seq=1
+seq=0
 
 # Iterate over each directory
 for dir in "${directories[@]}"; do
