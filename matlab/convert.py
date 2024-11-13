@@ -14,15 +14,16 @@ from os.path import join
 import pdb
 import ruamel.yaml
 import argparse
+import cv2
 
 import scipy.io as sio
 import numpy as np
 
-# EXPECTED_CALIBS = ['K_cam0.mat', 'K_cam1.mat', 'T_cam0_cam1.mat', 'T_os1_cam0.mat',
-#                    'K_cam2.mat', 'K_cam3.mat', 'K_cam4.mat', 
-#                    'T_os1_cam2.mat', 'T_os1_cam3.mat', 'T_os1_cam4.mat']
-EXPECTED_CALIBS = ['T_cam0_cam1.mat', 'T_os1_cam0.mat',
+EXPECTED_CALIBS = ['K_cam0.mat', 'K_cam1.mat', 'T_cam0_cam1.mat', 'T_os1_cam0.mat',
+                   'K_cam2.mat', 'K_cam3.mat', 'K_cam4.mat', 
                    'T_os1_cam2.mat', 'T_os1_cam3.mat', 'T_os1_cam4.mat']
+#EXPECTED_CALIBS = ['T_cam0_cam1.mat', 'T_os1_cam0.mat',
+#                   'T_os1_cam2.mat', 'T_os1_cam3.mat', 'T_os1_cam4.mat']
 
 def my_represent_float(self, data):
     if 0 < abs(data) < 1e-5:
@@ -37,10 +38,13 @@ yaml.representer.add_representer(float, my_represent_float)
 
 parser = argparse.ArgumentParser(description='Copy images from a folder to another folder')
 parser.add_argument('-i', '--indir', type=str, default="./matlab_data",  help='Input folder that contains matlab calibration .mat files')
+parser.add_argument('-ih', '--image_height', type=int, default=600, help='Image height for the camera')
+parser.add_argument('-iw', '--image_width', type=int, default=960, help='Image width for the camera')
 parser.add_argument('-s', '--sequence', type=int, default=44, help='Sequence to use for the images')
 parser.add_argument('-o', '--outdir', type=str, default="calibration_outputs/calibrations", help='Output folder to save yaml calibration files')
+parser.add_argument('-l', '--use_lidar', action='store_false', help='Whether to use lidar data or not')
 
-def read_mat_as_dict(filename):
+def read_mat_as_dict(filename, image_size):
     """
     Read a .mat file and return its contents in standardized calibration format.
 
@@ -75,8 +79,8 @@ def read_mat_as_dict(filename):
             "data": dist.flatten().tolist()
         }
         calib['distortion_model'] = "plumb_bob"
-        calib['image_height'] = 600
-        calib['image_width'] = 960
+        calib['image_width'] = image_size[0]
+        calib['image_height'] = image_size[1]
     elif caltype=="T":
         A = mat['A'].reshape(4, 4)
 
@@ -93,7 +97,7 @@ def read_mat_as_dict(filename):
 
     return calib, sensorname
 
-def compute_lidar_to_cameras(calib_dict):
+def compute_lidar_to_cameras(calib_dict, use_lidar):
     """
     Computes the transformation from the lidar to each camera using the extrinsics from lidar to cam0 and then
     cam0 to all other cameras
@@ -108,24 +112,79 @@ def compute_lidar_to_cameras(calib_dict):
     T_cam0_cam1 = calib_dict['cam0_to_cam1']['extrinsic_matrix']['data']
     T_cam0_cam1 = np.array(T_cam0_cam1).reshape(4, 4)
 
-    T_os1_cam0 = calib_dict['os1_to_cam0']['extrinsic_matrix']['data']
-    T_os1_cam0 = np.array(T_os1_cam0).reshape(4, 4)
-    T_os1_to_cam1 = T_cam0_cam1 @ T_os1_cam0
-    calib_dict['os1_to_cam1'] = {
-        "extrinsic_matrix": {
-            "rows": 4,
-            "cols": 4,
-            "data": T_os1_to_cam1.flatten().tolist()
+    if use_lidar:
+        T_os1_cam0 = calib_dict['os1_to_cam0']['extrinsic_matrix']['data']
+        T_os1_cam0 = np.array(T_os1_cam0).reshape(4, 4)
+        T_os1_to_cam1 = T_cam0_cam1 @ T_os1_cam0
+        calib_dict['os1_to_cam1'] = {
+            "extrinsic_matrix": {
+                "rows": 4,
+                "cols": 4,
+                "data": T_os1_to_cam1.flatten().tolist()
+            }
         }
-    }
 
     return calib_dict
+
+def compute_intercamera_transformations(calib_dict, transform_filename):
+    cam_list = list(calib_dict.keys())
+    if "cam0_to_cam1" not in cam_list:
+        return
+
+    essentialfilename = join(os.path.dirname(transform_filename), f'E_cam0_cam1.mat')
+    intercameraposefilename = join(os.path.dirname(transform_filename), f'T_cam0_cam1.mat')
+    assert os.path.exists(essentialfilename), f'Inter-camera calibration {essentialfilename} does not exist'
+    assert os.path.exists(intercameraposefilename), f'Inter-camera pose calibration {intercameraposefilename} does not exist'
+    essential_mat = sio.loadmat(essentialfilename)
+    intercamera_mat = sio.loadmat(intercameraposefilename)
+    
+    K1 = np.array(calib_dict['cam0']['camera_matrix']['data'], dtype=np.float64).reshape(3, 3)
+    K2 = np.array(calib_dict['cam1']['camera_matrix']['data'], dtype=np.float64).reshape(3, 3)
+    dist1 = np.array(calib_dict['cam0']['distortion_coefficients']['data'], dtype=np.float64)
+    dist2 = np.array(calib_dict['cam1']['distortion_coefficients']['data'], dtype=np.float64)
+
+    image_size = (calib_dict['cam0']['image_width'], calib_dict['cam0']['image_height'])
+    RT = np.array(calib_dict['cam0_to_cam1']['extrinsic_matrix']['data'], dtype=np.float64).reshape(4, 4)
+    R = RT[:3, :3].reshape(3, 3)
+    T = RT[:3, 3].reshape(3, 1)
+    R1, R2, P1, P2, Q, _, _ = cv2.stereoRectify(K1, dist1, K2, dist2, image_size, R, T, flags=cv2.CALIB_ZERO_DISPARITY)
+    calib_dict['cam0']['rectification_matrix'] = {
+        "rows": 3,
+        "cols": 3,
+        "data": R1.flatten().tolist()
+    }
+    calib_dict['cam1']['rectification_matrix'] = {
+        "rows": 3,
+        "cols": 3,
+        "data": R2.flatten().tolist()
+    }
+    calib_dict['cam0']['projection_matrix'] = {
+        "rows": 3,
+        "cols": 4,
+        "data": P1.flatten().tolist()
+    }
+    calib_dict['cam1']['projection_matrix'] = {
+        "rows": 3,
+        "cols": 4,
+        "data": P2.flatten().tolist()
+    }
+    calib_dict['cam0']['disparity_matrix'] = {
+        "rows": 4,
+        "cols": 4,
+        "data": Q.flatten().tolist()
+    }
+    calib_dict['cam1']['disparity_matrix'] = {
+        "rows": 4,
+        "cols": 4,
+        "data": Q.flatten().tolist()
+    }
 
 
 def main(args):
     indir = args.indir
     seq = args.sequence
     outdir = args.outdir
+    use_lidar = args.use_lidar
     assert os.path.exists(indir), f'Input folder {indir} does not exist'
 
     if not os.path.exists(outdir):
@@ -135,15 +194,23 @@ def main(args):
 
     #1 Load all matlab calibrations to ROS compatible dictionaries
     calib_dict = {}
+    intercamera_filename = None
     for filename in os.listdir(calib_dir):
         if filename in EXPECTED_CALIBS:
             print(f'Processing {filename}')
-            calib, sensorname = read_mat_as_dict(join(calib_dir, filename))
+            calib, sensorname = read_mat_as_dict(join(calib_dir, filename), image_size=(args.image_width, args.image_height))
+            if sensorname == "cam0_to_cam1":
+                intercamera_filename = join(calib_dir, filename)
             calib_dict[sensorname] = calib
-            
+
+    #1a Compute inter camera transformations
+    print("|- Computing inter-camera transformations -|")
+    if intercamera_filename is not None:
+        compute_intercamera_transformations(calib_dict, intercamera_filename)
+     
     #2 Compute remaining transformations from the extrinsics
     print("|- Computing remaining lidar to camera transformations -|")
-    compute_lidar_to_cameras(calib_dict)
+    compute_lidar_to_cameras(calib_dict, use_lidar)
     
     #3 Save all calibrations to yaml files
     for sensorname, calib in calib_dict.items():
