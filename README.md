@@ -35,6 +35,9 @@ tandist = cam1_params.Intrinsics.TangentialDistortion;
 K = cam1_params.Intrinsics.K;
 save("K_cam1.mat", "K", "raddist", "tandist")
 
+E = stereoParams.EssentialMatrix
+save("E_cam0_cam1.mat", "E")
+
 A = stereoParams.PoseCamera2.A;
 save("T_cam0_cam1.mat", "A")
 ```
