@@ -72,7 +72,8 @@ def read_mat_as_dict(filename, image_size):
         dist = np.array([0,0,0,0,0], dtype=np.float64)
         dist[0], dist[1] = mat['raddist'][0][0], mat['raddist'][0][1]
         dist[2], dist[3] = mat['tandist'][0][0], mat['tandist'][0][1]
-        dist[4] = mat['raddist'][0][2]
+        if len(mat['raddist'][0]) > 2:
+            dist[4] = mat['raddist'][0][2]
         calib['distortion_coefficients'] = {
             "rows": 1,
             "cols": 5,
@@ -147,7 +148,7 @@ def compute_intercamera_transformations(calib_dict, transform_filename):
     RT = np.array(calib_dict['cam0_to_cam1']['extrinsic_matrix']['data'], dtype=np.float64).reshape(4, 4)
     R = RT[:3, :3].reshape(3, 3)
     T = RT[:3, 3].reshape(3, 1)
-    R1, R2, P1, P2, Q, _, _ = cv2.stereoRectify(K1, dist1, K2, dist2, image_size, R, T, flags=cv2.CALIB_ZERO_DISPARITY)
+    R1, R2, P1, P2, Q, _, _ = cv2.stereoRectify(K1, dist1, K2, dist2, image_size, R, T, flags=cv2.CALIB_ZERO_DISPARITY, alpha=0)
     calib_dict['cam0']['rectification_matrix'] = {
         "rows": 3,
         "cols": 3,
