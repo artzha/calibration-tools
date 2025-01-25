@@ -98,6 +98,31 @@ def read_mat_as_dict(filename, image_size):
 
     return calib, sensorname
 
+def get_pts2pixel_transform(calib_dict, camid):
+    """
+    Returns a transformation matrix that converts 3D points in LiDAR frame to image pixel coordinates
+    Boilerplate function to get the projection matrix from the calibration dictionary
+
+    P =  Pcam @ Eye(Re | 0) @ T_lidar_cam
+
+    Inputs:
+        calib_dict: [dict] calibration dictionary
+    Outputs:
+        pts2pix: [4 x 4] transformation matrix
+    """
+    T_lidar_cam = np.array(calib_dict[f'os1_to_{camid}']['extrinsic_matrix']['data']).reshape(4, 4)
+
+    T_canon = np.eye(4)
+    T_canon[:3, :3] = np.array(calib_dict[f'{camid}']['rectification_matrix']['data']).reshape(3, 3)
+
+    M = np.array(calib_dict[f'{camid}']['projection_matrix']['data']).reshape(3, 4)[:3, :3]
+    P_pix_cam = np.eye(4)
+    P_pix_cam[:3, :3] = M
+
+    T_lidar_to_rect = P_pix_cam @ T_canon @ T_lidar_cam
+
+    return T_lidar_to_rect[:3, :]
+
 def compute_lidar_to_cameras(calib_dict, use_lidar):
     """
     Computes the transformation from the lidar to each camera using the extrinsics from lidar to cam0 and then
@@ -117,6 +142,7 @@ def compute_lidar_to_cameras(calib_dict, use_lidar):
         T_os1_cam0 = calib_dict['os1_to_cam0']['extrinsic_matrix']['data']
         T_os1_cam0 = np.array(T_os1_cam0).reshape(4, 4)
         T_os1_to_cam1 = T_cam0_cam1 @ T_os1_cam0
+
         calib_dict['os1_to_cam1'] = {
             "extrinsic_matrix": {
                 "rows": 4,
@@ -125,6 +151,16 @@ def compute_lidar_to_cameras(calib_dict, use_lidar):
             }
         }
 
+        # Add projection matrices for the lidar to rectified pixel coordinates for cam0 and cam1
+        for camid in ['cam0', 'cam1']:
+            T_os1_camrect = get_pts2pixel_transform(calib_dict, camid)
+            calib_dict[f'os1_to_{camid}'].update({
+                "projection_matrix": {
+                    "rows": 3,
+                    "cols": 4,
+                    "data": T_os1_camrect.flatten().tolist()
+                }
+            })
     return calib_dict
 
 def compute_intercamera_transformations(calib_dict, transform_filename):
@@ -136,8 +172,6 @@ def compute_intercamera_transformations(calib_dict, transform_filename):
     intercameraposefilename = join(os.path.dirname(transform_filename), f'T_cam0_cam1.mat')
     assert os.path.exists(essentialfilename), f'Inter-camera calibration {essentialfilename} does not exist'
     assert os.path.exists(intercameraposefilename), f'Inter-camera pose calibration {intercameraposefilename} does not exist'
-    essential_mat = sio.loadmat(essentialfilename)
-    intercamera_mat = sio.loadmat(intercameraposefilename)
     
     K1 = np.array(calib_dict['cam0']['camera_matrix']['data'], dtype=np.float64).reshape(3, 3)
     K2 = np.array(calib_dict['cam1']['camera_matrix']['data'], dtype=np.float64).reshape(3, 3)
